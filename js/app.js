@@ -288,6 +288,9 @@ function renderCategory(courseIndex, entry, section, changeCallback) {
                 const assignmentModal = new bootstrap.Modal(document.getElementById("assignmentModal"));
                 assignmentModal.show();
 
+                // reset the form just in case there's some values from an unsubmitted assignment edit 
+                assignmentForm.reset();
+
                 // change the title of the modal to reflect that we are adding an assignment (this modal is reused for editing assignments)
                 document.getElementById("assignmentModalLabel").textContent = "Add Assignment";
 
@@ -704,9 +707,54 @@ function renderTable(table, grades, sort="nameAsc", gradeChangeCallback) {
             textContent: `${assignment.grade.toFixed(2)}%`
         });
 
-        createElement(row, "td", {
-            class: "text-underline",
-            textContent: `Edit`
+        const actionCell = createElement(row, "td", {
+            class: "text-underline"
+        });
+
+        // create an edit assignment "link" that should act like a button to launch the modal
+        createElement(actionCell, "span", {
+            class: "fake-link text-decoration-underline",
+            textContent: "Edit",
+            onclick: () => {
+                // launch the assignment modal
+                const assignmentModal = new bootstrap.Modal(document.getElementById("assignmentModal"));
+                assignmentModal.show();
+
+                // update the modal title to reflect that we're editing an assignment
+                document.getElementById("assignmentModalLabel").textContent = "Edit Assignment";
+
+                // populate the form fields
+                document.getElementById("assignmentName").value = assignment.name;
+                document.getElementById("actualPoints").value = assignment.actualPoints;
+                document.getElementById("possiblePoints").value = assignment.possiblePoints;
+
+                // intercept the form from being submitted
+                assignmentForm.onsubmit = e => {
+                    // prevent the form from actually being submitted
+                    e.preventDefault();
+
+                    // get data from the form
+                    const formData = new FormData(assignmentForm);
+
+                    // get the data and update the form
+                    assignment.name = formData.get("assignmentName");
+                    assignment.actualPoints = parseFloat(formData.get("actualPoints"));
+                    assignment.possiblePoints = parseFloat(formData.get("possiblePoints"));
+                    
+                    // reset the form
+                    assignmentForm.reset();
+
+                    // save the changes made to teh assignment object
+                    saveCourseData();
+
+                    // let the category know that a grade value has changed
+                    gradeChangeCallback();
+
+                    // re-render table
+                    table.innerHTML = "";
+                    renderTable(table, grades, sort, gradeChangeCallback);
+                }
+            }
         });
     });
 }
