@@ -78,8 +78,22 @@ function renderCourse(course, index) {
                 }
             }, 0);
 
-        // TODO calculate unweighted average if nothing is weighted?
-        const courseAverage = (weightedSum / sumWeights).toFixed(2);
+        // calculate unweighted average if nothing is weighted
+        let courseAverage;
+        if (sumWeights === 0)
+        {
+            if (Object.values(course.categories).every(x => x.hasOwnProperty("average")))
+            {
+                courseAverage = Object.values(course.categories)
+                    .reduce((a, b) => a + b.average, 0)
+                    / Object.values(course.categories).length;
+            }
+        }
+        // if there are weights, do a weighted average
+        else 
+        {
+            courseAverage = (weightedSum / sumWeights).toFixed(2);
+        }
 
         // calculate average badge color modifier
         let modifier = "";
@@ -178,9 +192,12 @@ function renderCategory(courseIndex, entry, section, changeCallback) {
     // re-calculate average for the category
     if (category.grades.length)
     {
-        // TODO account for numDrops
+        // calculate average to account for numDrops
         category.average = category.grades.map(x => x.grade)
-            .reduce((a, b) => a + b) / category.grades.length;
+            .sort((a, b) => a - b)
+            .slice(category.numDrops)
+            .reduce((a, b) => a + b) 
+            / (category.grades.length - category.numDrops);
 
         // let the course know that an average has been (re)computed
         changeCallback();
@@ -232,24 +249,21 @@ function renderCategory(courseIndex, entry, section, changeCallback) {
     renderTable(table, category.grades, "nameAsc", () => {
         // calculate the new sum of grades
         const sum = category.grades
-            .reduce((sum, curr) => {
-                if (curr.hypotheticalPoints)
-                {
-                    sum += (curr.hypotheticalPoints / curr.possiblePoints) * 100;
-                }
-                else
-                {
-                    sum += (curr.actualPoints / curr.possiblePoints) * 100;
-                }
-
-                return sum;
-            }, 0);
+            .sort((a, b) => a.grade - b.grade)
+            .slice(category.numDrops)
+            .reduce((a, b) => a + b.grade, 0);
 
         // calculate the average from the sum and number of assigments
-        const average = sum / category.grades.length;
+        const average = sum / (category.grades.length - category.numDrops);
+
+        // update the category average field
+        category.average = average;
         
         // update the category average element
-        averageEl.textContent = `${average.toFixed(2)}%`;
+        averageEl.textContent = `${category.average.toFixed(2)}%`;
+
+        // notify the course that the average has changed
+        changeCallback();
     });
 
     // create an input group to show the select and button inline
@@ -453,7 +467,7 @@ function renderCategory(courseIndex, entry, section, changeCallback) {
                         saveCourseData();
 
                         // re-render to show changes
-                        // TODO figure out if i can do a more localized re-render? rendering all of courses for a category change is OD
+                        // TODO localize the re-render to the course only
                         renderCourses();
                     }
                 }
@@ -675,12 +689,46 @@ function renderTable(table, grades, sort="nameAsc", gradeChangeCallback) {
                             // update the assignment object
                             assignment.hypotheticalPoints = parseFloat(e.target.value).toFixed(2);
 
-                            // get rid of the input and show the hypothetical point value
-                            cell.innerHTML = assignment.hypotheticalPoints;
+                            // get rid of the input
+                            cell.innerHTML = "";
+
+                            // TODO add back button
+                            const undoBtn = createElement(cell, "span", {
+                                class: "fa fa-undo",
+                                onclick: () => {
+                                    // delete the undo button
+                                    undoBtn.remove();
+
+                                    // delete hypothetical points field
+                                    delete assignment.hypotheticalPoints;
+
+                                    // revert grade back to actual points
+                                    assignment.grade = assignment.actualPoints / assignment.possiblePoints * 100;
+                                    const gradeCell = cell.parentNode.cells[4];
+                                    gradeCell.innerText = `${assignment.grade.toFixed(2)}%`;
+
+                                    // revert textContent back to actualPoints
+                                    cell.textContent = assignment.actualPoints;
+
+                                    // change the row color back to show that it no longer houses a hypothetical value
+                                    row.classList.remove("table-info");
+
+                                    // let the category know that a grade value has changed
+                                    gradeChangeCallback();
+                                }
+                            })
+
+                            // show the hypothetical point value
+                            createElement(cell, "span", {
+                                textContent: ` ${assignment.hypotheticalPoints}`
+                            });
 
                             // calculate the grade with the hypothetical points
-                            const gradeCell = cell.parentNode.cells[3];
-                            gradeCell.innerText = `${(assignment.hypotheticalPoints / assignment.possiblePoints * 100).toFixed(2)}%`;
+                            assignment.grade = assignment.hypotheticalPoints / assignment.possiblePoints * 100;
+
+                            // update the grade cell
+                            const gradeCell = cell.parentNode.cells[4];
+                            gradeCell.innerText = `${assignment.grade.toFixed(2)}%`;
 
                             // change row color to know that it houses a hypothetical value
                             row.classList.add("table-info");
