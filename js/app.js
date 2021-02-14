@@ -72,9 +72,13 @@ function renderCourse(course, index) {
                 // only calculate weighted categories that have computed averages
                 if (category.weight && category.average) 
                 {
-                    weightedSum += category.weight * category.average;
+                    // do not include categories where the assignments are dropped
+                    if (category.grades.length - category.numDrops > 0)
+                    {
+                        weightedSum += category.weight * category.average;
 
-                    sumWeights += category.weight;
+                        sumWeights += category.weight;
+                    }
                 }
             }, 0);
 
@@ -115,35 +119,39 @@ function renderCourse(course, index) {
         averageEl.textContent = `${isNaN(courseAverage) ? 0: courseAverage}%`;
     }
 
-    calculateAverage();
+    // if the course is not blank (i.e. has categories) 
+    if (course.categories)
+    {
+        calculateAverage();
 
-    // render all the categories
-    const categories = Object.entries(course.categories);
-    categories.forEach(entry => {
-        const [ name, category ] = entry;
+        // render all the categories
+        const categories = Object.entries(course.categories);
+        categories.forEach(entry => {
+            const [ name, category ] = entry;
 
-        // calculate grades for the category
-        category.grades
-            .forEach(assignment => {
-                // if the assignment has a what-if grade
-                if (assignment.hasOwnProperty("hypotheticalPoints"))
-                {
-                    assignment.grade = (assignment.hypotheticalPoints / assignment.possiblePoints) * 100;
-                }
-                // if the assignment is normally graded
-                else
-                {
-                    assignment.grade = (assignment.actualPoints / assignment.possiblePoints) * 100;
-                }
-            });
+            // calculate grades for the category
+            category.grades
+                .forEach(assignment => {
+                    // if the assignment has a what-if grade
+                    if (assignment.hasOwnProperty("hypotheticalPoints"))
+                    {
+                        assignment.grade = (assignment.hypotheticalPoints / assignment.possiblePoints) * 100;
+                    }
+                    // if the assignment is normally graded
+                    else
+                    {
+                        assignment.grade = (assignment.actualPoints / assignment.possiblePoints) * 100;
+                    }
+                });
 
-        // create a section for each category to isolate re-renders to smaller sections
-        const categorySection = createElement(section, "section");
+            // create a section for each category to isolate re-renders to smaller sections
+            const categorySection = createElement(section, "section");
 
-        // render the category
-        renderCategory(index, entry, categorySection, calculateAverage);
-    });
-
+            // render the category
+            renderCategory(index, entry, categorySection, calculateAverage);
+        });
+    }
+    
     // create button to add a category to the course
     createElement(section, "button", { 
         class: "btn btn-info text-white",
@@ -209,13 +217,22 @@ function renderCategory(courseIndex, entry, section, changeCallback) {
     // add category name element
     createElement(header, "span", { textContent: `${name} ` });
 
+    // assemble the category description with the weight
+    let categoryDescription = category.hasOwnProperty("weight") ?
+        `This category accounts for ${category.weight}% of your course grade.`
+        :
+        `This category needs to be updated with the weight as listed in your syllabus.`;
+    
+    // if the category drops assignments, put that in the description
+    if (category.numDrops !== 0)
+    {
+        categoryDescription += ` The lowest ${category.numDrops} assignment(s) will be dropped.`
+    }
+
     // add category weight element
     createElement(section, "span", {
         class: "fst-italic",
-        textContent: category.hasOwnProperty("weight") ?
-            `This category accounts for ${category.weight}% of your course grade.`
-            :
-            `This category needs to be updated with the weight as listed in your syllabus.`
+        textContent: categoryDescription
     });
 
     // calculate average badge color modifier
@@ -823,13 +840,16 @@ courseDataForm.onsubmit = async e => {
     const numCredits = formData.get("numCredits");
     const courseGradesDataFile = formData.get("courseData");
 
-    // get the file text to parse as JSON
-    const courseGradesDataFileContents = await courseGradesDataFile.text();
-    const courseGradesDataObject = tryParseJSON(courseGradesDataFileContents);
+    let courseGradesDataObject;
+    if (courseGradesDataFile.size !== 0)
+    {
+        // get the file text to parse as JSON
+        const courseGradesDataFileContents = await courseGradesDataFile.text();
+        courseGradesDataObject = tryParseJSON(courseGradesDataFileContents);
+    }
 
     // make sure at the very least the user uploaded a valid JSON file
-    if (courseGradesDataObject)
-    {
+   
         // create a course data object that will be stored in a course array
         const courseDataObject = {
             name: courseName,
@@ -837,17 +857,20 @@ courseDataForm.onsubmit = async e => {
             categories: courseGradesDataObject
         };
 
-        // for each category, calculate the percentage grades
-        Object.values(courseDataObject.categories)
-            .forEach(category => {
-                // add all grade entries for the category
-                category.grades
-                    .forEach(entry => {
-                        // show the actual points out of the possible points, and the percentage value
-                        entry.grade = `${entry.actualPoints} / ${parseFloat(entry.possiblePoints, 10).toFixed(2)}`;
-                    });
-            });
-
+        if (courseGradesDataObject)
+        {
+            // for each category, calculate the percentage grades
+            Object.values(courseDataObject.categories)
+                .forEach(category => {
+                    // add all grade entries for the category
+                    category.grades
+                        .forEach(entry => {
+                            // show the actual points out of the possible points, and the percentage value
+                            entry.grade = `${entry.actualPoints} / ${parseFloat(entry.possiblePoints, 10).toFixed(2)}`;
+                        });
+                });
+        }
+        
         // add course data object to course array
         courses.push(courseDataObject);
 
@@ -860,8 +883,8 @@ courseDataForm.onsubmit = async e => {
 
         // show newly added course
         renderCourses();
-    }
 }
+
 
 /**
  * Process the add category form submission to add a category to a course.
