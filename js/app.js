@@ -840,7 +840,7 @@ courseDataForm.onsubmit = async e => {
     const numCredits = formData.get("numCredits");
     const courseGradesDataFile = formData.get("courseData");
 
-    let courseGradesDataObject;
+    let courseGradesDataObject = {};
     if (courseGradesDataFile.size !== 0)
     {
         // get the file text to parse as JSON
@@ -848,41 +848,39 @@ courseDataForm.onsubmit = async e => {
         courseGradesDataObject = tryParseJSON(courseGradesDataFileContents);
     }
 
-    // make sure at the very least the user uploaded a valid JSON file
-   
-        // create a course data object that will be stored in a course array
-        const courseDataObject = {
-            name: courseName,
-            credits: numCredits,
-            categories: courseGradesDataObject
-        };
+    // create a course data object that will be stored in a course array
+    const courseDataObject = {
+        name: courseName,
+        credits: numCredits,
+        categories: courseGradesDataObject
+    };
 
-        if (courseGradesDataObject)
-        {
-            // for each category, calculate the percentage grades
-            Object.values(courseDataObject.categories)
-                .forEach(category => {
-                    // add all grade entries for the category
-                    category.grades
-                        .forEach(entry => {
-                            // show the actual points out of the possible points, and the percentage value
-                            entry.grade = `${entry.actualPoints} / ${parseFloat(entry.possiblePoints, 10).toFixed(2)}`;
-                        });
-                });
-        }
-        
-        // add course data object to course array
-        courses.push(courseDataObject);
+    if (courseGradesDataObject) 
+    {
+        // for each category, calculate the percentage grades
+        Object.values(courseDataObject.categories)
+            .forEach(category => {
+                // add all grade entries for the category
+                category.grades
+                    .forEach(entry => {
+                        // show the actual points out of the possible points, and the percentage value
+                        entry.grade = `${entry.actualPoints} / ${parseFloat(entry.possiblePoints, 10).toFixed(2)}`;
+                    });
+            });
+    }
 
-        // close modal
-        const addCoursesModal = bootstrap.Modal.getInstance(document.getElementById("addCourseGradesModal"));
-        addCoursesModal.hide();
+    // add course data object to course array
+    courses.push(courseDataObject);
 
-        // save course array to localStorage
-        saveCourseData();
+    // close modal
+    const addCoursesModal = bootstrap.Modal.getInstance(document.getElementById("addCourseGradesModal"));
+    addCoursesModal.hide();
 
-        // show newly added course
-        renderCourses();
+    // save course array to localStorage
+    saveCourseData();
+
+    // show newly added course
+    renderCourses();
 }
 
 
